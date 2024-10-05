@@ -64,7 +64,7 @@ def generate_and_insert_ref_data(client):
 
 def generate_and_insert_trades_data(client):
     # Generate and insert Trades data
-    trades_data = generate_fo_trades_trs(client,num_records=1000)
+    trades_data = generate_fo_trades_trs(client,num_records=15000)
     df = pd.DataFrame(trades_data)
     df.set_index('id', inplace=True)
 

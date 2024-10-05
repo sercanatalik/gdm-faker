@@ -57,13 +57,13 @@ def insert_fo_risk_data(client, risk_data):
 
 def create_risk_materialized(client):
     # Drop the existing view if it exists
-    drop_sql = "DROP TABLE IF EXISTS mv_fo_financing_risk"
+    drop_sql = "DROP TABLE IF EXISTS mv_fo_financing_trades"
     client.command(drop_sql)
 
     # Create the new materialized view
     create_sql = """
-    CREATE MATERIALIZED VIEW mv_fo_financing_risk
-    ENGINE = MergeTree()
+    CREATE MATERIALIZED VIEW mv_fo_financing_trades
+    ENGINE = ReplacingMergeTree()
     ORDER BY (t.id)
     POPULATE
     AS SELECT
