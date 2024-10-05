@@ -52,6 +52,7 @@ def generate_fo_trades_trs(client, num_records=1000):
         record = {
             'id': str(uuid.uuid4()),
             'trade_id': str(uuid.uuid4()),
+            'book': random.choice(books),
             'counterparty': random.choice(counterparties),
             'trade_date': fake.date_between(start_date='-1y', end_date='today'),
             'effective_date': fake.date_between(start_date='-1y', end_date='today'),
