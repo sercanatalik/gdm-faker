@@ -1,7 +1,12 @@
+
 from faker import Faker
 from datetime import datetime, timedelta
 import random
 import uuid
+import clickhouse_connect
+from create_tables import Tables
+import pandas as pd
+client = clickhouse_connect.get_client(host='127.0.0.1', port=8123)
 
 fake = Faker()
 
@@ -41,105 +46,65 @@ countries = ['United States', 'United Kingdom', 'Germany', 'France', 'Japan', 'C
 
 
 
+
+def generate_fo_hms_data(num_records=25):
+    data = []
+    for i in range(num_records):
+        record = {
+            'trader': random.choice(traders),
+            'desk': random.choice(desks),
+            'book': random.choice(books),
+            'id': fake.uuid4(),
+            'updatedAt': datetime.now()
+        }
+
+        data.append(record)
+    return data
+
+
+def load_hms_data():
+    hms_data = generate_fo_hms_data(num_records=100)
+    df = pd.DataFrame(hms_data)
+    df.set_index('id', inplace=True)
+    client.insert_df(Tables.HMSBOOKS.value, df.reset_index())
+
+
+
+
+
+def generate_fo_counterparty_data(num_records=1000):
+    data = []
+    for i in range(num_records):
+        record = {
+            'id': str(uuid.uuid4()),
+            'name': fake.company(),
+            'country': random.choice(countries),
+            'sector': random.choice(['Technology', 'Healthcare', 'Finance', 'Energy', 'Consumer Goods']),
+            'industry': fake.job(),
+            'rating': random.choice(['AAA', 'AA', 'A', 'BBB', 'BB', 'B', 'CCC']),
+            'updatedAt': fake.date_time_between(start_date='-1y', end_date='now')
+        }
+        data.append(record)
+    return data          
+
+
+def load_counterparty_data():
+    counterparty_data = generate_fo_counterparty_data(num_records=1000)
+    df = pd.DataFrame(counterparty_data)
+    df.set_index('id', inplace=True)
+    client.insert_df(Tables.COUNTERPARTIES.value, df.reset_index())
+
+
+
 def generate_random_isin():
     country_code = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=2))
     security_identifier = ''.join(random.choices('0123456789', k=9))
     check_digit = random.randint(0, 9)
     return f"{country_code}{security_identifier}{check_digit}"
 
-def create_fo_hms_table(table_name):
-    
-    # SQL statement to create the fo_hms table
-    create_table_sql = """
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        id String,
-        balance_sheet String,
-        trader String,
-        desk String,
-        portfolio String,
-        book String,
-        region String,
-        bookGuid String,
-        updatedAt DateTime
-    ) ENGINE = ReplacingMergeTree()
-    ORDER BY (id,bookGuid,updatedAt);
-    """
-
-    return create_table_sql.format(table_name=table_name)
-
-def create_fo_counterparty_table(table_name):
-    create_table_sql = """
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        id String,
-        name String,
-        region String,
-        country String,
-        sector String,
-        industry String,
-        rating String,
-        updated_at DateTime
-    ) ENGINE = ReplacingMergeTree()
-    ORDER BY (id,name,updated_at);
-    """
-
-    return create_table_sql.format(table_name=table_name)
-
-
-def create_fo_instrument_table(table_name):
-    create_table_sql = """
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        id String,
-        isin String,
-        cusip String,
-        sedol String,
-        name String,
-        issuer String,
-        region String,
-        country String,
-        sector String,
-        industry String,
-        currency String,
-        issue_date Date,
-        maturity_date Date,
-        coupon Decimal(5,2),
-        coupon_frequency String,
-        yield_to_maturity Decimal(5,2),
-        price Decimal(10,2),
-        face_value Decimal(10,2),
-        rating String,
-        is_callable UInt8,
-        is_puttable UInt8,
-        is_convertible UInt8,
-        updated_at DateTime
-    ) ENGINE = ReplacingMergeTree()
-    ORDER BY (id,updated_at);
-    """
-
-    return create_table_sql.format(table_name=table_name)
-
-
-
-def generate_fo_hms_data(num_records=25):
-    data = []
-    for i in range(num_records):
-        record = {
-            'balance_sheet': random.choice(balance_sheet),
-            'trader': random.choice(traders),
-            'desk': random.choice(desks),
-            'portfolio': random.choice(portfolios),
-            'book': random.choice(books),
-            'region': random.choice(regions),
-            'bookGuid': fake.uuid4(),
-            'updatedAt': datetime.now()
-        }
-        record['id'] = record['bookGuid']   
-
-        data.append(record)
-    return data
 
 def generate_fo_instrument_data(num_records=1000):
     data = []
-
     names = [f"{random.choice(countries)}" for _ in range(25)]
     names.extend([f"{fake.company()}" for _ in range(50)])
 
@@ -162,34 +127,32 @@ def generate_fo_instrument_data(num_records=1000):
             'sector': random.choice(['Technology', 'Healthcare', 'Finance', 'Energy', 'Consumer Goods']),
             'industry': fake.job(),
             'currency': fake.currency_code(),
-            'issue_date': issue_date,
-            'maturity_date': maturity_date,
+            'issueDate': issue_date,
+            'maturityDate': maturity_date,
             'coupon': round(random.uniform(0, 10), 2),
-            'coupon_frequency': random.choice(['Annual', 'Semi-Annual', 'Quarterly']),
-            'yield_to_maturity': round(random.uniform(0, 15), 2),
+            'couponFrequency': random.choice(['Annual', 'Semi-Annual', 'Quarterly']),
+            'yieldToMaturity': round(random.uniform(0, 15), 2),
             'price': round(random.uniform(50, 150), 2),
-            'face_value': round(random.uniform(500, 2000), 2),
+            'faceValue': round(random.uniform(500, 2000), 2),
             'rating': random.choice(['AAA', 'AA', 'A', 'BBB', 'BB', 'B', 'CCC']),
-            'is_callable': random.choice([0, 1]),
-            'is_puttable': random.choice([0, 1]),
-            'is_convertible': random.choice([0, 1]),
-            'updated_at': fake.date_time_between(start_date='-1y', end_date='now')
+            'isCallable': random.choice([0, 1]),
+            'isPuttable': random.choice([0, 1]),
+            'isConvertible': random.choice([0, 1]),
+            'updatedAt': fake.date_time_between(start_date='-1y', end_date='now')
         }
         data.append(record)
     return data
 
-def generate_fo_counterparty_data(num_records=1000):
-    data = []
-    for i in range(num_records):
-        record = {
-            'id': str(uuid.uuid4()),
-            'name': fake.company(),
-            'region': random.choice(regions),
-            'country': random.choice(countries),
-            'sector': random.choice(['Technology', 'Healthcare', 'Finance', 'Energy', 'Consumer Goods']),
-            'industry': fake.job(),
-            'rating': random.choice(['AAA', 'AA', 'A', 'BBB', 'BB', 'B', 'CCC']),
-            'updated_at': fake.date_time_between(start_date='-1y', end_date='now')
-        }
-        data.append(record)
-    return data          
+def load_instrument_data():
+    instrument_data = generate_fo_instrument_data(num_records=1000)
+    df = pd.DataFrame(instrument_data)
+    df.set_index('id', inplace=True)
+    client.insert_df(Tables.INSTRUMENTS.value, df.reset_index())
+    
+
+
+if __name__ == "__main__":
+    load_hms_data()
+    load_counterparty_data()
+    load_instrument_data()
+
