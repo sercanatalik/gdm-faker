@@ -20,12 +20,12 @@ def generate_fo_risk_data(client):
             'id': trade['id'],
             'tradeId': trade['id'],
             'notionalAmount': Decimal(str(trade['notionalAmount'])),  # Use the original notional amount
-            'cashout': Decimal(str(random.uniform(0, random.uniform(1,0.5)*float(trade['notionalAmount'])))),
+            'cashout': Decimal(str(random.uniform(0, float(trade['notionalAmount']) * random.uniform(0.5, 1)))),
             'spread': Decimal(str(trade['financingSpread'])),
-            'accrualDaily': Decimal( str(trade['financingSpread']*trade['notionalAmount']/365) ),
-            'accrualPast': Decimal( str(trade['financingSpread']*trade['notionalAmount']*90/365) ),
-            'accrualProjected': Decimal( str(trade['financingSpread']*trade['notionalAmount']*150/365) ),
-            'ead': float(trade['notionalAmount'])*0.4, 
+            'accrualDaily': Decimal(str(float(trade['financingSpread']) * float(trade['notionalAmount']) / 365 * random.uniform(0.5, 2.0))),
+            'accrualPast': Decimal(str(float(trade['financingSpread']) * float(trade['notionalAmount']) * 90 / 365 * random.uniform(0.5, 2.0))),
+            'accrualProjected': Decimal(str(float(trade['financingSpread']) * float(trade['notionalAmount']) * 150 / 365 * random.uniform(0.5, 2.0))),
+            'ead': Decimal(str(float(trade['notionalAmount']) * 0.4)), 
             'fxSpot': Decimal(str(random.uniform(0.5, 2.0))),
             'ccy': trade['currency'],
             'updatedAt': datetime.now(),
@@ -51,3 +51,10 @@ if __name__ == "__main__":
     
     risk_data = generate_fo_risk_data(client)
     insert_fo_risk_data(client, risk_data)
+
+
+    while True:
+        risk_data = generate_fo_risk_data(client)
+        insert_fo_risk_data(client, risk_data)
+        print(f"Inserted {len(risk_data)} risk records",datetime.now())
+        time.sleep(5)

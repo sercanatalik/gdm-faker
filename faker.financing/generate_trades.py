@@ -78,5 +78,5 @@ def load_trades_to_clickhouse(client, data):
 
 if __name__ == "__main__":
 
-    data = generate_fo_trades_trs(client, num_records=1)
+    data = generate_fo_trades_trs(client, num_records=10)
     load_trades_to_clickhouse(client, data)

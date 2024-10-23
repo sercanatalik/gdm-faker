@@ -209,10 +209,9 @@ async def create_risk_view_mv():
 async def create_risk_aggregating_view():
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW.value} (
+        hmsDesk LowCardinality(String),
+        hmsTrader LowCardinality(String),
         book LowCardinality(String),
-        counterparty LowCardinality(String),
-        instrument LowCardinality(String),
-        ccy LowCardinality(String),
         asOfDate Date,
         totalNotionalAmount Decimal(38,2),
         totalDailyAccrual Decimal(38,2),
@@ -222,7 +221,7 @@ async def create_risk_aggregating_view():
         totalPastAccrual Decimal(38,2),
         version UInt64
     ) ENGINE = ReplacingMergeTree(version)
-    ORDER BY (book, counterparty, instrument, ccy, asOfDate);
+    ORDER BY (hmsDesk, hmsTrader, book, asOfDate);
     """
     client.command(query)
 
@@ -230,10 +229,9 @@ async def create_risk_aggregating_view():
     mv_query = f"""
     CREATE MATERIALIZED VIEW IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW_MV.value} TO {Tables.RISK_AGGREGATING_VIEW.value}
     AS SELECT
+        hmsDesk,
+        hmsTrader,
         book,
-        counterparty,
-        instrument,
-        ccy,
         asOfDate,
         sum(notionalAmount) AS totalNotionalAmount,
         sum(dailyAccrual) AS totalDailyAccrual,
@@ -241,10 +239,9 @@ async def create_risk_aggregating_view():
         sum(ead) AS totalEad,
         sum(projectedAccrual) AS totalProjectedAccrual,
         sum(pastAccrual) AS totalPastAccrual,
-
         max(version) AS version
     FROM {Tables.RISKVIEW.value}
-    GROUP BY book, counterparty, instrument, ccy, asOfDate;
+    GROUP BY hmsDesk, hmsTrader, book, asOfDate;
     """
     client.command(mv_query)
 
