@@ -15,6 +15,7 @@ class Tables(enum.Enum):
     RISKVIEW_MV = "risk_view_mv"
     RISK_AGGREGATING_VIEW = "risk_agg"
     RISK_AGGREGATING_VIEW_MV = "risk_agg_mv"
+    OVERRIDES = "overrides"
     
 
 async def create_db():
@@ -115,6 +116,8 @@ async def create_risk_tables():
         id String,
         tradeId String,
         version UInt64,
+        tradeDt Date,
+        maturityDt Date,
         book LowCardinality(String),
         notionalAmount Decimal(18,2),
         instrument LowCardinality(String),
@@ -144,6 +147,8 @@ async def create_risk_view():
         id String,
         tradeId String,
         version UInt64,
+        tradeDt Date,
+        maturityDt Date,
         book LowCardinality(String),
         notionalAmount Decimal(18,2),
         instrument LowCardinality(String),
@@ -178,6 +183,8 @@ async def create_risk_view_mv():
     r.tradeId as tradeId,
     r.version as version,
     r.book as book,
+    r.tradeDt as tradeDt,
+    r.maturityDt as maturityDt,
     r.instrument as instrument,
     r.counterparty as counterparty,
     r.updatedAt as updatedAt,
@@ -247,6 +254,22 @@ async def create_risk_aggregating_view():
 
 
 
+async def create_overrides():
+    query = f"""
+    CREATE TABLE IF NOT EXISTS {Tables.OVERRIDES.value} (
+        id String,
+        type LowCardinality(String),
+        newValue String,
+        previousValue String,
+        version UInt64,
+        updatedAt DateTime,
+        updatedBy String,
+        comments String,
+    ) ENGINE = MergeTree()
+    ORDER BY (id,version,type);
+    """
+    client.command(query)
+
 
 
 
@@ -261,6 +284,7 @@ async def main():
     await create_risk_view()
     await create_risk_view_mv()
     await create_risk_aggregating_view()
+    await create_overrides()
     # await create_risk_materialized_view()
 
 if __name__ == "__main__":
