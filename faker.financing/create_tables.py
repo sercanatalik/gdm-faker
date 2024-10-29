@@ -121,6 +121,7 @@ async def create_risk_tables():
     settlementDt Date,
     maturityDt Date,
     notionalCcy Decimal(18,2),
+    notionalAmount Decimal(18,2),
     firstReset Decimal(18,2),
     subType LowCardinality(String),
     productType LowCardinality(String),
@@ -152,9 +153,12 @@ async def create_risk_tables():
     margin Decimal(18,2),
     accrualDaily Decimal(18,2),
     accrualProjected Decimal(18,2),
+    accrualPast Decimal(18,2),
     calculatedAt DateTime,
+    ead Decimal(18,2),
     snapId String, 
     asOfDate Date,
+    spread Decimal(18,2)
 
     ) ENGINE = ReplacingMergeTree(version)
     ORDER BY (id, version, snapId,asOfDate)
@@ -187,12 +191,16 @@ async def create_risk_view():
         hmsBook LowCardinality(String),
         hmsTrader LowCardinality(String),
         hmsDesk LowCardinality(String),
-        accrual_daily Decimal(18,2),
+        accrualDaily Decimal(18,2),
         accrualProjected Decimal(18,2),
+        accrualPast Decimal(18,2),
         cashOut Decimal(18,2),
         margin Decimal(18,2),
         fxSpot Decimal(18,2),
-        marginFixed Decimal(18,2)
+        marginFixed Decimal(18,2),
+        spread Decimal(18,2),
+        ead Decimal(18,2)        
+
     ) ENGINE = ReplacingMergeTree(version)
     ORDER BY (id,asOfDate)
     """
@@ -220,19 +228,19 @@ async def create_risk_view_mv():
     r.notionalAmount as notionalAmount,
     r.asOfDate as asOfDate,
     r.cashOut as cashOut,
-    r.ccy as ccy,
     cp.sector AS cpSector,
     cp.industry AS cpIndustry,
     cp.rating AS cpRating,
     hms.book AS hmsBook,
     hms.trader AS hmsTrader,
     hms.desk AS hmsDesk,
-    r.accrualDaily as dailyAccrual,
-    r.accrualPast as pastAccrual,
-    r.accrualProjected as projectedAccrual,
+    r.accrualDaily as accrualDaily,
+    r.accrualPast as accrualPast,
+    r.accrualProjected as accrualProjected,
     r.ead as ead,
     r.fxSpot as fxSpot,
     r.spread as spread
+    
     FROM {Tables.RISK.value} r
     INNER JOIN {Tables.COUNTERPARTIES.value} cp ON r.counterparty = cp.name
     INNER JOIN {Tables.HMSBOOKS.value} hms ON r.book = hms.book
