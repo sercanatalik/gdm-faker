@@ -16,7 +16,7 @@ class Tables(enum.Enum):
     RISK_AGGREGATING_VIEW = "risk_agg"
     RISK_AGGREGATING_VIEW_MV = "risk_agg_mv"
     OVERRIDES = "overrides"
-    
+    JOBS = "jobs"
 
 async def create_db():
     query = f"""
@@ -161,7 +161,7 @@ async def create_risk_tables():
     spread Decimal(18,2)
 
     ) ENGINE = ReplacingMergeTree(version)
-    ORDER BY (id, version, snapId,asOfDate)
+    ORDER BY (id, version, snapId)
     PRIMARY KEY (id)
     SETTINGS index_granularity = 8192;
     """
@@ -202,7 +202,7 @@ async def create_risk_view():
         ead Decimal(18,2)        
 
     ) ENGINE = ReplacingMergeTree(version)
-    ORDER BY (id,asOfDate)
+    ORDER BY (id,version,snapId)
     """
     client.command(query)
 
@@ -310,6 +310,21 @@ async def create_overrides():
 
 
 
+async def create_jobs_table():
+    query = f"""
+    CREATE TABLE IF NOT EXISTS {Tables.JOBS.value} (
+        id String,
+        jobType LowCardinality(String),
+        snapId String,
+        snapVersion UInt8,
+        status LowCardinality(String),
+        createdAt DateTime,
+        completedAt Nullable(DateTime)
+    ) ENGINE = ReplacingMergeTree()
+    ORDER BY (snapId,snapVersion);
+    """
+    client.command(query)
+
 
 async def main():
     await create_db()
@@ -322,7 +337,7 @@ async def main():
     await create_risk_view_mv()
     await create_risk_aggregating_view()
     await create_overrides()
-    # await create_risk_materialized_view()
+    await create_jobs_table()
 
 if __name__ == "__main__":
     asyncio.run(main())    

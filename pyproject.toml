@@ -9,5 +9,6 @@ dependencies = [
     "clickhouse-connect>=0.7.19",
     "faker>=29.0.0",
     "pandas>=2.2.3",
-    "polars>=1.8.1",
+    "polars>=1.9.0",
+    "pyarrow>=18.0.0",
 ]
