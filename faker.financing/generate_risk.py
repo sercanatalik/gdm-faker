@@ -3,32 +3,31 @@ import random
 from datetime import datetime
 from clickhouse_connect import get_client
 from decimal import Decimal
-import clickhouse_connect
 from dataclasses import dataclass
 from typing import Optional
 import polars as pl
-
-client = clickhouse_connect.get_client(host='127.0.0.1', port=8123, username='default', password='')
+from create_tables import Store,Tables
+client = Store().client
 
 @dataclass
 class Job:
     id: str
-    snap_id: str
-    snap_version: int
-    job_type: str
+    snapId: str
+    snapVersion: int
+    jobType: str
     status: str
-    created_at: datetime
-    completed_at: Optional[datetime] = None
+    createdAt: datetime
+    completedAt: Optional[datetime] = None
     
     @classmethod
     def create_intraday(cls, version: int, snapId: str) -> 'Job':
         return cls(
             id=str(uuid.uuid4()),
-            snap_id=snapId, 
-            snap_version=version,
-            job_type='INTRADAY',
+            snapId=snapId, 
+            snapVersion=version,
+            jobType='INTRADAY',
             status='RUNNING',
-            created_at=datetime.now(),
+            createdAt=datetime.now(),
            
         )
     
@@ -43,16 +42,16 @@ class Job:
     def to_dict(self) -> dict:
         return {
             'id': self.id,
-            'snapId': self.snap_id,
-            'snapVersion': self.snap_version,
-            'jobType': self.job_type,
+            'snapId': self.snapId,
+            'snapVersion': self.snapVersion,
+            'jobType': self.jobType,
             'status': self.status,
-            'createdAt': self.created_at,
-            'completedAt': self.completed_at if self.completed_at else datetime.now()
+            'createdAt': self.createdAt,
+            'completedAt': self.completedAt if self.completedAt else datetime.now()
         }
 
 def generate_fo_risk_data(client,snapId,snapVersion):
-    trades = client.query("SELECT * FROM trades")
+    trades = client.query("SELECT * FROM "+Tables.TRADES.value)
     
     risk_data = []
     for trade in trades.named_results():
@@ -63,9 +62,12 @@ def generate_fo_risk_data(client,snapId,snapVersion):
         
         risk_record = {
             'id': trade['id'],
-            'version': snapVersion,
+            'snapId': snapId,
+            'snapVersion': snapVersion,
+            'asOfDate': datetime.now().date(),
             'status': random.choice(['ACTIVE', 'PENDING', 'SETTLED']),
             'book': trade['book'],
+            'counterparty': trade['counterparty'],
             'tradeDt': datetime.now().date(),
             'settlementDt': datetime.now().date(),
             'maturityDt': datetime.now().date(),
@@ -81,7 +83,6 @@ def generate_fo_risk_data(client,snapId,snapVersion):
             'iaimCcy': trade['currency'],
             'side': random.choice(['BUY', 'SELL']),
             'model': random.choice(['BLACK_SCHOLES', 'MONTE_CARLO', 'BINOMIAL']),
-            'counterparty': trade['counterparty'],
             'notionalFundingCcy': notional_amount * fx_spot,
             'marginOis': Decimal(str(random.uniform(0, 0.02))),
             'marginFixed': Decimal(str(random.uniform(0, 0.05))),
@@ -105,8 +106,6 @@ def generate_fo_risk_data(client,snapId,snapVersion):
             'accrualPast': spread * notional_amount * Decimal('90') / Decimal('365'),
             'calculatedAt': datetime.now(),
             'ead': notional_amount * Decimal('0.4'),
-            'snapId': snapId,
-            'asOfDate': datetime.now().date(),
             'spread': spread
         }
         risk_data.append(risk_record)
@@ -118,17 +117,18 @@ def insert_fo_risk_data(client, risk_data):
     # Get columns directly from DataFrame schema
     columns = df.columns
     pdf = df.to_pandas()
-    client.insert_df("risk", pdf, column_names=columns)
+    client.insert_df(Tables.RISK.value, pdf, column_names=columns)
 
 def create_job(client, snapId: str) -> Job:
-    latest_version = client.query(f"SELECT MAX(snapVersion) FROM jobs WHERE snapId = '{snapId}'").first_row[0]
+    latest_version = client.query(f"SELECT MAX(snapVersion) FROM {Tables.JOBS.value} WHERE snapId = '{snapId}'").result_rows[0][0]
+    print(latest_version)
     version = 1 if latest_version is None else latest_version + 1
-    
+    print(f"SELECT MAX(snapVersion) FROM {Tables.JOBS.value} WHERE snapId = '{snapId}'")
     job = Job.create_intraday(version, snapId)
     df = pl.DataFrame([job.to_dict()])
     columns = df.columns
     pdf = df.to_pandas()
-    client.insert_df("jobs", pdf, column_names=columns)
+    client.insert_df(Tables.JOBS.value, pdf, column_names=columns)
     return job
 
 def update_job_status(client, job: Job) -> None:
@@ -136,10 +136,11 @@ def update_job_status(client, job: Job) -> None:
     # Get columns directly from DataFrame schema
     columns = df.columns
     pdf = df.to_pandas()
-    client.insert_df("jobs", pdf, column_names=columns)
+    client.insert_df(Tables.JOBS.value, pdf, column_names=columns)
 
 if __name__ == "__main__":
-    while True:
+    x = True
+    while x is True:
         job = None
         try:
             # Create a new job
@@ -147,14 +148,14 @@ if __name__ == "__main__":
             job = create_job(client,snapId)
             
             # Generate and insert risk data
-            risk_data = generate_fo_risk_data(client, job.snap_id, job.snap_version)
+            risk_data = generate_fo_risk_data(client, job.snapId, job.snapVersion)
             insert_fo_risk_data(client, risk_data)
             print(f"Inserted {len(risk_data)} risk records", datetime.now())
             # Update job status to COMPLETED
             job.complete()
             update_job_status(client, job)
             print(f"Completed job {job.id}", datetime.now())
-            
+            x = False    
         except Exception as e:
             if job:
                 job.fail()

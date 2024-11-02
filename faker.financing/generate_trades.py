@@ -41,7 +41,7 @@ def generate_fo_trades_trs(store, num_records=1000):
 def fetch_counterparties_from_clickhouse(store):
     
     # Execute the query to fetch counterparties
-    result = store.client.query("SELECT DISTINCT masterGroup FROM ref_counterparties")
+    result = store.client.query("SELECT DISTINCT id FROM ref_counterparties")
 
     # Extract counterparty IDs from the result
     counterparties = [row[0] for row in result.result_rows]

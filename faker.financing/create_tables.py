@@ -140,7 +140,9 @@ def create_risk_tables(store: Store):
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISK.value} (
            id String,
-    version Int64,
+    snapId String,
+    snapVersion Int64,
+    asOfDate Date,
     status LowCardinality(String),
     book LowCardinality(String),
     tradeDt Date,
@@ -182,14 +184,10 @@ def create_risk_tables(store: Store):
     accrualPast Decimal(18,2),
     calculatedAt DateTime,
     ead Decimal(18,2),
-    snapId String, 
-    asOfDate Date,
     spread Decimal(18,2)
 
-    ) ENGINE = ReplacingMergeTree(version)
-    ORDER BY (id, version, snapId)
-    PRIMARY KEY (id)
-    SETTINGS index_granularity = 8192;
+    ) ENGINE = ReplacingMergeTree(snapVersion)
+    ORDER BY (id, snapId)
     """
     store.client.command(query)
 
@@ -199,7 +197,9 @@ def create_risk_view(store: Store):
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISKVIEW.value} (
         id String,
-        version Int64,
+        snapVersion Int64,
+        snapId String,
+        asOfDate Date,
         status LowCardinality(String),
         book LowCardinality(String),
         trade_dt Date,
@@ -210,8 +210,6 @@ def create_risk_view(store: Store):
         counterparty LowCardinality(String),
         instrumentId String,
         updatedAt DateTime,
-        snapId String,
-        asOfDate Date,
         cpSector LowCardinality(String),
         cpIndustry LowCardinality(String),
         cpRating LowCardinality(String),
@@ -232,8 +230,8 @@ def create_risk_view(store: Store):
         spread Decimal(18,2),
         ead Decimal(18,2)        
 
-    ) ENGINE = ReplacingMergeTree(version)
-    ORDER BY (id,version,snapId)
+    ) ENGINE = ReplacingMergeTree(snapVersion)
+    ORDER BY (id,snapId)
     """
     store.client.command(query)
 
@@ -241,43 +239,44 @@ def create_risk_view(store: Store):
 def create_risk_view_mv(store: Store):
     print(f"Creating {Tables.RISKVIEW_MV.value} materialized view")
     query = f"""
-    CREATE MATERIALIZED VIEW {Tables.RISKVIEW_MV.value} TO {Tables.RISKVIEW.value}
-    AS SELECT
-    r.id as id,
-    r.version as version,
-    r.status as status,
-    r.book as book,
-    r.tradeDt as tradeDt,
-    r.settlementDt as settlementDt,
-    r.maturityDt as maturityDt,
-    r.notionalCcy as notionalCcy,
-    r.firstReset as firstReset,
-    r.subType as subType,
-    r.productType as productType,
-    r.ccy as ccy,
-    r.counterparty as counterparty,
-    r.calculatedAt as calculatedAt,
-    r.snapId as snapId,
-    r.notionalAmount as notionalAmount,
-    r.asOfDate as asOfDate,
-    r.cashOut as cashOut,
-    cp.cbSector AS cpSector,
-    cp.riskRatingCrr AS cpRating,
-    hms.book AS hmsBook,
-    hms.trader AS hmsTrader,
-    hms.desk AS hmsDesk,
-    r.accrualDaily as accrualDaily,
-    r.accrualPast as accrualPast,
-    r.accrualProjected as accrualProjected,
-    r.ead as ead,
-    r.fxSpot as fxSpot,
-    r.spread as spread,
-    inst.name as instrumentName,
-    inst.currency as instrumentCurrency,
-    inst.country as instrumentCountry,
-    inst.sector as instrumentSector
-    
-    FROM {Tables.RISK.value} r
+    CREATE MATERIALIZED VIEW risk_view_mv TO risk_view
+    AS SELECT 
+        r.id as id,
+        r.snapId as snapId,
+        r.snapVersion as snapVersion,
+        r.asOfDate,
+        r.status,
+        r.book,
+        r.tradeDt as trade_dt,
+        r.settlementDt,
+        r.maturityDt,
+        r.notionalCcy,
+        r.ccy,
+        r.counterparty,
+        r.instrumentId,
+        r.calculatedAt as updatedAt,
+     
+        cp.cbSector as cpSector,
+        cp.cbSector as cpIndustry,
+        cp.riskRatingCrr as cpRating,
+        hms.book as hmsBook,
+        hms.trader as hmsTrader,
+        hms.desk as hmsDesk,
+        inst.name as instrumentName,
+        inst.currency as instrumentCurrency,
+        inst.country as instrumentCountry,
+        inst.sector as instrumentSector,
+        r.accrualDaily,
+        r.accrualProjected,
+        r.accrualPast,
+        r.cashOut,
+        r.margin,
+        r.fxSpot,
+        r.marginFixed,
+        r.spread,
+        r.ead
+
+    FROM {Tables.RISK.value} as r 
     INNER JOIN {Tables.COUNTERPARTIES.value} cp ON r.counterparty = cp.id
     INNER JOIN {Tables.HMSBOOKS.value} hms ON r.book = hms.book
     INNER JOIN {Tables.INSTRUMENTS.value} inst ON r.instrumentId = inst.id
@@ -290,18 +289,17 @@ def create_risk_aggregating_view(store: Store):
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW.value} (
         hmsDesk LowCardinality(String),
-        hmsTrader LowCardinality(String),
-        book LowCardinality(String),
         asOfDate Date,
+        snapVersion UInt8,
         totalNotionalAmount Decimal(38,2),
         totalDailyAccrual Decimal(38,2),
         totalCashout Decimal(38,2),
         totalEad Decimal(38,2),
         totalProjectedAccrual Decimal(38,2),
         totalPastAccrual Decimal(38,2),
-        version UInt64
-    ) ENGINE = ReplacingMergeTree(version)
-    ORDER BY (hmsDesk, hmsTrader, book, asOfDate);
+        calculatedAt DateTime
+    ) ENGINE = ReplacingMergeTree(snapVersion)
+    ORDER BY (hmsDesk, asOfDate);
     """
     store.client.command(query)
 
@@ -310,18 +308,21 @@ def create_risk_aggregating_view(store: Store):
     CREATE MATERIALIZED VIEW IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW_MV.value} TO {Tables.RISK_AGGREGATING_VIEW.value}
     AS SELECT
         hmsDesk,
-        hmsTrader,
-        book,
         asOfDate,
+        snapVersion,
         sum(notionalCcy) AS totalNotionalAmount,
         sum(accrualDaily) AS totalDailyAccrual,
         sum(cashOut) AS totalCashout,
         sum(ead) AS totalEad,
         sum(accrualProjected) AS totalProjectedAccrual,
         sum(accrualPast) AS totalPastAccrual,
-        max(version) AS version
-    FROM {Tables.RISKVIEW.value}
-    GROUP BY hmsDesk, hmsTrader, book, asOfDate;
+        now() AS calculatedAt
+    FROM (
+        SELECT *
+        FROM {Tables.RISKVIEW.value}
+         
+    )
+    GROUP BY asOfDate, hmsDesk,snapVersion;
     """
     store.client.command(mv_query)
 
@@ -364,6 +365,7 @@ def create_jobs_table(store: Store):
 def main():
     store = Store()
     create_db(store)
+    create_jobs_table(store)
     create_hms_tables(store) 
     create_counterparty_tables(store)
     create_instruments_tables(store)
@@ -373,7 +375,7 @@ def main():
     create_risk_view_mv(store)
     create_risk_aggregating_view(store)
     create_overrides(store)
-    create_jobs_table(store)
+   
     store.close()
 
 if __name__ == "__main__":

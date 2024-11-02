@@ -38,7 +38,7 @@ def load_refdata():
 @flow(log_prints=True,  persist_result=False,cache_result_in_memory=False)
 def load_trades():
     store = Store()
-    data = generate_fo_trades_trs(store, num_records=10)
+    data = generate_fo_trades_trs(store, num_records=1)
     load_trades_to_clickhouse(store, data)
     store.close()
 
