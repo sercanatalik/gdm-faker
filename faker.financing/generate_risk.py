@@ -138,28 +138,17 @@ def update_job_status(client, job: Job) -> None:
     pdf = df.to_pandas()
     client.insert_df(Tables.JOBS.value, pdf, column_names=columns)
 
-if __name__ == "__main__":
-    x = True
-    while x is True:
-        job = None
-        try:
-            # Create a new job
-            snapId = 'LIVE'+datetime.now().strftime("%Y%m%d")
-            job = create_job(client,snapId)
-            
-            # Generate and insert risk data
-            risk_data = generate_fo_risk_data(client, job.snapId, job.snapVersion)
-            insert_fo_risk_data(client, risk_data)
-            print(f"Inserted {len(risk_data)} risk records", datetime.now())
-            # Update job status to COMPLETED
-            job.complete()
-            update_job_status(client, job)
-            print(f"Completed job {job.id}", datetime.now())
-            x = False    
-        except Exception as e:
-            if job:
-                job.fail()
-                update_job_status(client, job)
-            print(f"Error: {str(e)}")
-            
-        time.sleep(5)
+
+def run_risk():
+    store = Store()
+    snapId = 'LIVE'+datetime.now().strftime("%Y%m%d")
+    job = create_job(store.client,snapId)
+        # Generate and insert risk data
+    risk_data = generate_fo_risk_data(store.client, job.snapId, job.snapVersion)
+    insert_fo_risk_data(store.client, risk_data)
+    print(f"Inserted {len(risk_data)} risk records", datetime.now())
+    job.complete()
+    update_job_status(store.client, job)
+    print(f"Completed job {job.id}", datetime.now())
+    store.close()
+

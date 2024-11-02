@@ -283,48 +283,7 @@ def create_risk_view_mv(store: Store):
     """
     store.client.command(query)
 
-@task(retries=0, cache_key_fn=None, persist_result=False)
-def create_risk_aggregating_view(store: Store):
-    print(f"Creating {Tables.RISK_AGGREGATING_VIEW.value} table")
-    query = f"""
-    CREATE TABLE IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW.value} (
-        hmsDesk LowCardinality(String),
-        asOfDate Date,
-        snapVersion UInt8,
-        totalNotionalAmount Decimal(38,2),
-        totalDailyAccrual Decimal(38,2),
-        totalCashout Decimal(38,2),
-        totalEad Decimal(38,2),
-        totalProjectedAccrual Decimal(38,2),
-        totalPastAccrual Decimal(38,2),
-        calculatedAt DateTime
-    ) ENGINE = ReplacingMergeTree(snapVersion)
-    ORDER BY (hmsDesk, asOfDate);
-    """
-    store.client.command(query)
 
-    print(f"Creating {Tables.RISK_AGGREGATING_VIEW_MV.value} materialized view")
-    mv_query = f"""
-    CREATE MATERIALIZED VIEW IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW_MV.value} TO {Tables.RISK_AGGREGATING_VIEW.value}
-    AS SELECT
-        hmsDesk,
-        asOfDate,
-        snapVersion,
-        sum(notionalCcy) AS totalNotionalAmount,
-        sum(accrualDaily) AS totalDailyAccrual,
-        sum(cashOut) AS totalCashout,
-        sum(ead) AS totalEad,
-        sum(accrualProjected) AS totalProjectedAccrual,
-        sum(accrualPast) AS totalPastAccrual,
-        now() AS calculatedAt
-    FROM (
-        SELECT *
-        FROM {Tables.RISKVIEW.value}
-         
-    )
-    GROUP BY asOfDate, hmsDesk,snapVersion;
-    """
-    store.client.command(mv_query)
 
 @task(retries=0, cache_key_fn=None, persist_result=False)
 def create_overrides(store: Store):
@@ -356,8 +315,8 @@ def create_jobs_table(store: Store):
         status LowCardinality(String),
         createdAt DateTime,
         completedAt Nullable(DateTime)
-    ) ENGINE = ReplacingMergeTree()
-    ORDER BY (snapId,snapVersion);
+    ) ENGINE = ReplacingMergeTree(snapVersion)
+    ORDER BY (snapId,jobType);
     """
     store.client.command(query)
 
@@ -373,7 +332,6 @@ def main():
     create_risk_tables(store)
     create_risk_view(store)
     create_risk_view_mv(store)
-    create_risk_aggregating_view(store)
     create_overrides(store)
    
     store.close()
