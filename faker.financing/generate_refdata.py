@@ -1,4 +1,3 @@
-
 from faker import Faker
 from datetime import datetime, timedelta
 import random
@@ -6,7 +5,8 @@ import uuid
 import clickhouse_connect
 from create_tables import Tables
 import pandas as pd
-client = clickhouse_connect.get_client(host='127.0.0.1', port=8123)
+from prefect import task
+from create_tables import Store
 
 fake = Faker()
 
@@ -62,11 +62,14 @@ def generate_fo_hms_data(num_records=25):
     return data
 
 
-def load_hms_data():
+@task(cache_key_fn=None,persist_result=False)
+def load_hms_data(store: Store):
     hms_data = generate_fo_hms_data(num_records=100)
     df = pd.DataFrame(hms_data)
     df.set_index('id', inplace=True)
-    client.insert_df(Tables.HMSBOOKS.value, df.reset_index())
+    store.client.insert_df(Tables.HMSBOOKS.value, df.reset_index())
+
+
 
 
 
@@ -75,24 +78,33 @@ def load_hms_data():
 def generate_fo_counterparty_data(num_records=1000):
     data = []
     for i in range(num_records):
+        id =  fake.lexify('???????')
         record = {
-            'id': str(uuid.uuid4()),
-            'name': fake.company(),
-            'country': random.choice(countries),
-            'sector': random.choice(['Technology', 'Healthcare', 'Finance', 'Energy', 'Consumer Goods']),
-            'industry': fake.job(),
-            'rating': random.choice(['AAA', 'AA', 'A', 'BBB', 'BB', 'B', 'CCC']),
-            'updatedAt': fake.date_time_between(start_date='-1y', end_date='now')
+            'site': random.choice(['LDN', 'NYC', 'LON', 'PAR', 'BER', 'MAD', 'IST', 'TOK', 'SYD', 'SFO']),
+            'treat4Parent': fake.lexify('????').upper(),
+            'treat7': id,
+            'countryOfIncorporation': random.choice(countries),
+            'countryOfPrimaryOperation': random.choice(countries),
+            'customerName': fake.company(),
+            'lei': fake.lexify('??????????????'),
+            'ptsShorName': fake.lexify('????'),
+            'riskRatingCrr': str(random.uniform(1, 5))[:3],
+            'riskRatingBucket': random.choice(['Ba3', 'Baa3', 'A3', 'BBB', 'BB', 'B', 'CCC']),
+            'riskRatingGDP': random.choice(['BB-', 'BB', 'B', 'CCC-', 'CCC', 'CC', 'C']),
+            'masterGroup': fake.lexify('????'),
+            'cbSector': random.choice(['Banks', 'Hedge Fund']),
+            'id': id,
         }
         data.append(record)
     return data          
 
 
-def load_counterparty_data():
+@task(cache_key_fn=None, persist_result=False)
+def load_counterparty_data(store: Store):
     counterparty_data = generate_fo_counterparty_data(num_records=1000)
     df = pd.DataFrame(counterparty_data)
     df.set_index('id', inplace=True)
-    client.insert_df(Tables.COUNTERPARTIES.value, df.reset_index())
+    store.client.insert_df(Tables.COUNTERPARTIES.value, df.reset_index())
 
 
 
@@ -143,11 +155,12 @@ def generate_fo_instrument_data(num_records=1000):
         data.append(record)
     return data
 
-def load_instrument_data():
+@task(cache_key_fn=None, persist_result=False)
+def load_instrument_data(store: Store):
     instrument_data = generate_fo_instrument_data(num_records=1000)
     df = pd.DataFrame(instrument_data)
     df.set_index('id', inplace=True)
-    client.insert_df(Tables.INSTRUMENTS.value, df.reset_index())
+    store.client.insert_df(Tables.INSTRUMENTS.value, df.reset_index())
     
 
 
@@ -155,7 +168,8 @@ def load_instrument_data():
 
 
 if __name__ == "__main__":
-    load_hms_data()
-    load_counterparty_data()
-    load_instrument_data()
+    store = Store()
+    # load_hms_data(store)
+    load_counterparty_data(store)
+    # load_instrument_data(store)
 

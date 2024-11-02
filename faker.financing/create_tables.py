@@ -1,16 +1,21 @@
 import clickhouse_connect
-import asyncio
-client = clickhouse_connect.get_client(host='127.0.0.1', port=8123)
-
+from prefect import task
 import enum
+
+class Store:
+    def __init__(self):
+        self.client = clickhouse_connect.get_client(host="127.0.0.1", port=8123)
+    def close(self):
+        self.client.close()
+
 
 class Tables(enum.Enum):
     HMSBOOKS = "ref_hms"
     DBNAME = "default"
     COUNTERPARTIES = "ref_counterparties"
     INSTRUMENTS = "ref_instruments"
-    TRADES = "trades"
-    RISK = "risk"
+    TRADES = "trades_trs"
+    RISK = "risk_f"
     RISKVIEW = "risk_view"
     RISKVIEW_MV = "risk_view_mv"
     RISK_AGGREGATING_VIEW = "risk_agg"
@@ -18,15 +23,21 @@ class Tables(enum.Enum):
     OVERRIDES = "overrides"
     JOBS = "jobs"
 
-async def create_db():
+@task(retries=0, cache_key_fn=None,persist_result=False)
+def create_db(store: Store) -> None:
+    """Create the database if it doesn't exist."""
+    print(f"Creating {Tables.DBNAME.value} database")
     query = f"""
     DROP DATABASE IF EXISTS {Tables.DBNAME.value}"""
-    client.command(query)
+    store.client.command(query)
     query = f"""
     CREATE DATABASE IF NOT EXISTS {Tables.DBNAME.value}"""
-    client.command(query)
-    
-async def create_hms_tables():
+    store.client.command(query)
+
+
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_hms_tables(store: Store):
+    print(f"Creating {Tables.HMSBOOKS.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.HMSBOOKS.value} (
         id String,
@@ -37,26 +48,37 @@ async def create_hms_tables():
     ) ENGINE = ReplacingMergeTree()
     ORDER BY (id,book,updatedAt);
     """
-    client.command(query)
+    store.client.command(query)
 
-
-async def  create_counterparty_tables():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_counterparty_tables(store: Store):
+    print(f"Creating {Tables.COUNTERPARTIES.value} table")
     query = f"""
-    CREATE TABLE IF NOT EXISTS {Tables.COUNTERPARTIES.value} (
-        id String,
-        name String,
-        country LowCardinality(String),
-        sector LowCardinality(String),
-        industry LowCardinality(String),
-        rating LowCardinality(String),
-        updatedAt DateTime,
-    ) ENGINE = ReplacingMergeTree()
-    ORDER BY (id,name,updatedAt);
+    CREATE TABLE IF NOT EXISTS {Tables.COUNTERPARTIES.value} ( 
+    site String,                    -- 3 character site code (e.g., 'LDN')
+    treat4Parent String,            -- 4 character treatment code (e.g., 'ABSA')
+    treat7 String,                 -- 7 character treatment code (e.g., 'ABSAJOS')
+    countryOfIncorporation String,  -- 2 character ISO country code (e.g., 'ZA')
+    countryOfPrimaryOperation String, -- 2 character ISO country code
+    customerName String,            -- Full customer name
+    lei String,                     -- Legal Entity Identifier (20 character)
+    ptsShorName String,            -- Short name identifier
+    riskRatingCrr String,          -- Risk rating (e.g., '4.3')
+    riskRatingBucket String,       -- Risk bucket (e.g., 'Ba3')
+    riskRatingGDP String,          -- GDP risk rating (e.g., 'BB-')
+    masterGroup String,            -- Master group name
+    cbSector String,               -- Business sector (e.g., 'Banks', 'Hedge Fund')
+    id String                      -- Unique identifier
+)
+ENGINE = ReplacingMergeTree()
+ORDER BY id;
     """
-    client.command(query)
+    store.client.command(query)
 
 
-async def create_instrument_tables():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_instruments_tables(store: Store):
+    print(f"Creating {Tables.INSTRUMENTS.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.INSTRUMENTS.value} (
     id String,
@@ -85,10 +107,11 @@ async def create_instrument_tables():
     ) ENGINE = ReplacingMergeTree()
     ORDER BY (id,updatedAt);
     """
-    client.command(query)
+    store.client.command(query)
 
-
-async def create_trades_tables():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_trades_tables(store: Store):
+    print(f"Creating {Tables.TRADES.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.TRADES.value} (
         id String,
@@ -108,9 +131,12 @@ async def create_trades_tables():
     ) ENGINE = ReplacingMergeTree()
     ORDER BY (id,updatedAt);
     """
-    client.command(query)
+    store.client.command(query)
 
-async def create_risk_tables():
+
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_risk_tables(store: Store):
+    print(f"Creating {Tables.RISK.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISK.value} (
            id String,
@@ -165,10 +191,11 @@ async def create_risk_tables():
     PRIMARY KEY (id)
     SETTINGS index_granularity = 8192;
     """
-    client.command(query)   
+    store.client.command(query)
 
-
-async def create_risk_view():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_risk_view(store: Store):
+    print(f"Creating {Tables.RISKVIEW.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISKVIEW.value} (
         id String,
@@ -191,6 +218,10 @@ async def create_risk_view():
         hmsBook LowCardinality(String),
         hmsTrader LowCardinality(String),
         hmsDesk LowCardinality(String),
+        instrumentName String,
+        instrumentCurrency LowCardinality(String),
+        instrumentCountry LowCardinality(String),
+        instrumentSector LowCardinality(String),
         accrualDaily Decimal(18,2),
         accrualProjected Decimal(18,2),
         accrualPast Decimal(18,2),
@@ -204,9 +235,11 @@ async def create_risk_view():
     ) ENGINE = ReplacingMergeTree(version)
     ORDER BY (id,version,snapId)
     """
-    client.command(query)
+    store.client.command(query)
 
-async def create_risk_view_mv():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_risk_view_mv(store: Store):
+    print(f"Creating {Tables.RISKVIEW_MV.value} materialized view")
     query = f"""
     CREATE MATERIALIZED VIEW {Tables.RISKVIEW_MV.value} TO {Tables.RISKVIEW.value}
     AS SELECT
@@ -228,9 +261,8 @@ async def create_risk_view_mv():
     r.notionalAmount as notionalAmount,
     r.asOfDate as asOfDate,
     r.cashOut as cashOut,
-    cp.sector AS cpSector,
-    cp.industry AS cpIndustry,
-    cp.rating AS cpRating,
+    cp.cbSector AS cpSector,
+    cp.riskRatingCrr AS cpRating,
     hms.book AS hmsBook,
     hms.trader AS hmsTrader,
     hms.desk AS hmsDesk,
@@ -239,17 +271,22 @@ async def create_risk_view_mv():
     r.accrualProjected as accrualProjected,
     r.ead as ead,
     r.fxSpot as fxSpot,
-    r.spread as spread
+    r.spread as spread,
+    inst.name as instrumentName,
+    inst.currency as instrumentCurrency,
+    inst.country as instrumentCountry,
+    inst.sector as instrumentSector
     
     FROM {Tables.RISK.value} r
-    INNER JOIN {Tables.COUNTERPARTIES.value} cp ON r.counterparty = cp.name
+    INNER JOIN {Tables.COUNTERPARTIES.value} cp ON r.counterparty = cp.id
     INNER JOIN {Tables.HMSBOOKS.value} hms ON r.book = hms.book
+    INNER JOIN {Tables.INSTRUMENTS.value} inst ON r.instrumentId = inst.id
     """
-    client.command(query)
+    store.client.command(query)
 
-
-
-async def create_risk_aggregating_view():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_risk_aggregating_view(store: Store):
+    print(f"Creating {Tables.RISK_AGGREGATING_VIEW.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW.value} (
         hmsDesk LowCardinality(String),
@@ -266,9 +303,9 @@ async def create_risk_aggregating_view():
     ) ENGINE = ReplacingMergeTree(version)
     ORDER BY (hmsDesk, hmsTrader, book, asOfDate);
     """
-    client.command(query)
+    store.client.command(query)
 
-    # Update the materialized view query
+    print(f"Creating {Tables.RISK_AGGREGATING_VIEW_MV.value} materialized view")
     mv_query = f"""
     CREATE MATERIALIZED VIEW IF NOT EXISTS {Tables.RISK_AGGREGATING_VIEW_MV.value} TO {Tables.RISK_AGGREGATING_VIEW.value}
     AS SELECT
@@ -286,31 +323,29 @@ async def create_risk_aggregating_view():
     FROM {Tables.RISKVIEW.value}
     GROUP BY hmsDesk, hmsTrader, book, asOfDate;
     """
-    client.command(mv_query)
+    store.client.command(mv_query)
 
-
-
-async def create_overrides():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_overrides(store: Store):
+    print(f"Creating {Tables.OVERRIDES.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.OVERRIDES.value} (
         id String,
         type LowCardinality(String),
         newValue String,    
         previousValue String,
-        version Int64,
         updatedAt DateTime,
         updatedBy String,
         comments String,
         isActive Boolean default 1
     ) ENGINE = MergeTree()
-    ORDER BY (id,version,type);
+    ORDER BY (type,updatedAt,id);
     """
-    client.command(query)
+    store.client.command(query)
 
-
-
-
-async def create_jobs_table():
+@task(retries=0, cache_key_fn=None, persist_result=False)
+def create_jobs_table(store: Store):
+    print(f"Creating {Tables.JOBS.value} table")
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.JOBS.value} (
         id String,
@@ -323,25 +358,23 @@ async def create_jobs_table():
     ) ENGINE = ReplacingMergeTree()
     ORDER BY (snapId,snapVersion);
     """
-    client.command(query)
+    store.client.command(query)
 
 
-async def main():
-    await create_db()
-    await create_hms_tables()   
-    await create_counterparty_tables()
-    await create_instrument_tables()
-    await create_trades_tables()
-    await create_risk_tables()
-    await create_risk_view()
-    await create_risk_view_mv()
-    await create_risk_aggregating_view()
-    await create_overrides()
-    await create_jobs_table()
+def main():
+    store = Store()
+    create_db(store)
+    create_hms_tables(store) 
+    create_counterparty_tables(store)
+    create_instruments_tables(store)
+    create_trades_tables(store)
+    create_risk_tables(store)
+    create_risk_view(store)
+    create_risk_view_mv(store)
+    create_risk_aggregating_view(store)
+    create_overrides(store)
+    create_jobs_table(store)
+    store.close()
 
 if __name__ == "__main__":
-    asyncio.run(main())    
-
-
-
-
+    main()

@@ -1,22 +1,20 @@
-
 from faker import Faker
 from datetime import datetime, timedelta
 import random
 import uuid
-import clickhouse_connect
 from create_tables import Tables
 import pandas as pd
-client = clickhouse_connect.get_client(host='127.0.0.1', port=8123)
-
+from create_tables import Store
+from prefect import task
 fake = Faker()
 
 
-
-def generate_fo_trades_trs(client, num_records=1000):
+@task(retries=0, persist_result=False)
+def generate_fo_trades_trs(store, num_records=1000):
     # Fetch counterparties from ClickHouse
-    counterparties = fetch_counterparties_from_clickhouse(client)
-    books = fetch_books_from_clickhouse(client)
-    underlying_assets = fetch_underlying_assets_from_clickhouse(client)
+    counterparties = fetch_counterparties_from_clickhouse(store)
+    books = fetch_books_from_clickhouse(store)
+    underlying_assets = fetch_underlying_assets_from_clickhouse(store)
 
     data = []
     for _ in range(num_records):
@@ -39,11 +37,11 @@ def generate_fo_trades_trs(client, num_records=1000):
         data.append(record)
     return data 
 
-
-def fetch_counterparties_from_clickhouse(client):
+@task(retries=0, persist_result=False)
+def fetch_counterparties_from_clickhouse(store):
     
     # Execute the query to fetch counterparties
-    result = client.query("SELECT DISTINCT name FROM ref_counterparties")
+    result = store.client.query("SELECT DISTINCT masterGroup FROM ref_counterparties")
 
     # Extract counterparty IDs from the result
     counterparties = [row[0] for row in result.result_rows]
@@ -51,32 +49,37 @@ def fetch_counterparties_from_clickhouse(client):
     return counterparties
 
 
-def fetch_books_from_clickhouse(client):
+@task(retries=0, persist_result=False)
+def fetch_books_from_clickhouse(store):
     # Execute the query to fetch books
-    result = client.query("SELECT DISTINCT book FROM ref_hms")
+    result = store.client.query("SELECT DISTINCT book FROM ref_hms")
 
     # Extract book IDs from the result
     books = [row[0] for row in result.result_rows]
 
     return books
 
-def fetch_underlying_assets_from_clickhouse(client):
+@task(retries=0, persist_result=False)
+def fetch_underlying_assets_from_clickhouse(store):
     # Execute the query to fetch underlying assets
-    result = client.query("SELECT DISTINCT id FROM ref_instruments")
+    result = store.client.query("SELECT DISTINCT id FROM ref_instruments")
 
     # Extract underlying asset IDs from the result
     underlying_assets = [row[0] for row in result.result_rows]
 
     return underlying_assets    
 
-def load_trades_to_clickhouse(client, data):
+@task(retries=0, persist_result=False)
+def load_trades_to_clickhouse(store, data):
     
     df = pd.DataFrame(data)
     df.set_index('id', inplace=True)
-    client.insert_df(Tables.TRADES.value, df.reset_index())
+    store.client.insert_df(Tables.TRADES.value, df.reset_index())
 
 
 if __name__ == "__main__":
 
-    data = generate_fo_trades_trs(client, num_records=10)
-    load_trades_to_clickhouse(client, data)
+    store = Store()
+    data = generate_fo_trades_trs(store, num_records=10)
+    print(data)
+    load_trades_to_clickhouse(store, data)
