@@ -8,6 +8,7 @@ from typing import Optional
 import polars as pl
 from create_tables import Store,Tables
 client = Store().client
+import numpy as np
 
 @dataclass
 class Job:
@@ -51,8 +52,8 @@ class Job:
         }
 
 def generate_fo_risk_data(client,snapId,snapVersion):
-    trades = client.query("SELECT * FROM "+Tables.TRADES.value)
-    
+    trades = client.query("SELECT * FROM "+Tables.TRADES.value + " final")
+    print(trades)
     risk_data = []
     for trade in trades.named_results():
         # Calculate some base values for consistency
@@ -62,6 +63,7 @@ def generate_fo_risk_data(client,snapId,snapVersion):
         
         risk_record = {
             'id': trade['id'],
+            'eventId': np.int64(str(snapVersion) + str(trade['eventId'])),
             'snapId': snapId,
             'snapVersion': snapVersion,
             'asOfDate': datetime.now().date(),
@@ -117,13 +119,18 @@ def insert_fo_risk_data(client, risk_data):
     # Get columns directly from DataFrame schema
     columns = df.columns
     pdf = df.to_pandas()
+    print(columns)
     client.insert_df(Tables.RISK.value, pdf, column_names=columns)
 
 def create_job(client, snapId: str) -> Job:
-    latest_version = client.query(f"SELECT MAX(snapVersion) FROM {Tables.JOBS.value} WHERE snapId = '{snapId}'").result_rows[0][0]
-    print(latest_version)
-    version = 1 if latest_version is None else latest_version + 1
-    print(f"SELECT MAX(snapVersion) FROM {Tables.JOBS.value} WHERE snapId = '{snapId}'")
+    try:
+        latest_version = client.query(f"SELECT MAX(snapVersion) FROM {Tables.JOBS.value} WHERE snapId = '{snapId}'").result_rows[0][0]
+        version = 0 if latest_version is None else latest_version + 1
+    except Exception as e:
+        print(f"Error querying version, defaulting to 0: {str(e)}")
+        version = 0
+    
+    print(f"Creating job with version: {version}")
     job = Job.create_intraday(version, snapId)
     df = pl.DataFrame([job.to_dict()])
     columns = df.columns
@@ -152,3 +159,7 @@ def run_risk():
     print(f"Completed job {job.id}", datetime.now())
     store.close()
 
+
+
+if __name__ == "__main__":
+    run_risk()

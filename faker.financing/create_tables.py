@@ -115,6 +115,7 @@ def create_trades_tables(store: Store):
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.TRADES.value} (
         id String,
+        eventId Int64,
         counterparty LowCardinality(String),
         instrument LowCardinality(String),
         book LowCardinality(String),
@@ -141,6 +142,7 @@ def create_risk_tables(store: Store):
     CREATE TABLE IF NOT EXISTS {Tables.RISK.value} (
            id String,
     snapId String,
+    eventId Int64,
     snapVersion Int64,
     asOfDate Date,
     status LowCardinality(String),
@@ -197,6 +199,7 @@ def create_risk_view(store: Store):
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.RISKVIEW.value} (
         id String,
+        eventId Int64,
         snapVersion Int64,
         snapId String,
         asOfDate Date,
@@ -242,18 +245,19 @@ def create_risk_view_mv(store: Store):
     CREATE MATERIALIZED VIEW risk_view_mv TO risk_view
     AS SELECT 
         r.id as id,
+        r.eventId as eventId,
         r.snapId as snapId,
         r.snapVersion as snapVersion,
-        r.asOfDate,
-        r.status,
-        r.book,
+        r.asOfDate as asOfDate,
+        r.status as status,
+        r.book as book,
         r.tradeDt as trade_dt,
-        r.settlementDt,
-        r.maturityDt,
-        r.notionalCcy,
-        r.ccy,
-        r.counterparty,
-        r.instrumentId,
+        r.settlementDt as settlementDt,
+        r.maturityDt as maturityDt,
+        r.notionalCcy as notionalCcy,
+        r.ccy as ccy,   
+        r.counterparty as counterparty,
+        r.instrumentId as instrumentId,
         r.calculatedAt as updatedAt,
      
         cp.cbSector as cpSector,
@@ -291,13 +295,14 @@ def create_overrides(store: Store):
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.OVERRIDES.value} (
         id String,
+        version UInt8,
         type LowCardinality(String),
         newValue String,    
         previousValue String,
         updatedAt DateTime,
         updatedBy String,
         comments String,
-        isActive Boolean default 1
+        isActive Boolean default 1,
     ) ENGINE = MergeTree()
     ORDER BY (type,updatedAt,id);
     """
@@ -309,6 +314,7 @@ def create_jobs_table(store: Store):
     query = f"""
     CREATE TABLE IF NOT EXISTS {Tables.JOBS.value} (
         id String,
+        eventId Int64,
         jobType LowCardinality(String),
         snapId String,
         snapVersion UInt8,

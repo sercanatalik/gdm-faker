@@ -3,10 +3,9 @@ name = "gdm-faker"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12.7"
 dependencies = [
-    "chdb>=2.0.4",
-    "clickhouse-connect>=0.7.19",
+    "clickhouse-connect>=0.8.6",
     "faker>=29.0.0",
     "pandas>=2.2.3",
     "polars>=1.9.0",

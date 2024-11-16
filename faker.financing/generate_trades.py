@@ -6,6 +6,8 @@ from create_tables import Tables
 import pandas as pd
 from create_tables import Store
 from prefect import task
+from dotenv import load_dotenv
+load_dotenv()
 fake = Faker()
 
 
@@ -20,6 +22,7 @@ def generate_fo_trades_trs(store, num_records=1000):
     for _ in range(num_records):
         record = {
             'id': str(uuid.uuid4()),
+            'eventId': random.randint(10000, 99999),
             'counterparty': random.choice(counterparties),
             'instrument': random.choice(underlying_assets),
             'book': random.choice(books),
@@ -78,8 +81,10 @@ def load_trades_to_clickhouse(store, data):
 
 
 if __name__ == "__main__":
-
+    
+    import os
+    print(os.getenv("PREFECT_API_URL"))
     store = Store()
-    data = generate_fo_trades_trs(store, num_records=10)
+    data = generate_fo_trades_trs(store, num_records=15)
     print(data)
     load_trades_to_clickhouse(store, data)
