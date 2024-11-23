@@ -1,115 +1,126 @@
 import asyncio
 import random
 import time
+from dataclasses import dataclass
+from typing import List, Dict, Optional
 import redis.asyncio as redis
-from typing import List, Dict
+from datetime import datetime
+
+@dataclass
+class PricingConfig:
+    redis_host: str = 'localhost'
+    redis_port: int = 6379
+    pool_size: int = 100
+    pool_timeout: int = 30
+    batch_size: int = 100
+    update_interval: int = 1
+    retry_attempts: int = 3
 
 class InstrumentPricingService:
-    def __init__(self, pool_size: int = 100, pool_timeout: int = 30):
-        self.pool_size = pool_size
-        self.pool_timeout = pool_timeout
-        self.redis_pool = redis.ConnectionPool(host='localhost', port=6379)
-        self.redis_client = None
-        self.INSTRUMENT_PREFIX = 'instrument:'
+    def __init__(self, config: Optional[PricingConfig] = None):
+        self.config = config or PricingConfig()
+        self.redis_pool = redis.ConnectionPool(
+            host=self.config.redis_host,
+            port=self.config.redis_port,
+            max_connections=self.config.pool_size
+        )
+        self.redis_client: Optional[redis.Redis] = None
         self.PRICE_PREFIX = 'price:'
-        self.CALC_TIME_PREFIX = 'calc_time:'
 
-    async def connect_redis(self):
-        self.redis_client = redis.Redis(connection_pool=self.redis_pool)
+    async def connect_redis(self) -> None:
+        # retry = Retry(ExponentialBackoff(), self.config.retry_attempts)
+        self.redis_client = redis.Redis(
+            connection_pool=self.redis_pool,
+           
+        )
+        await self.redis_client.flushdb(asynchronous=True)
 
-    async def close_redis(self):
+    async def close_redis(self) -> None:
         if self.redis_client:
             await self.redis_client.aclose()
+            self.redis_client = None
 
-    async def mock_pricing_service(self, instrument_id: str) -> float:
-        """Simulate external pricing service"""
+    async def mock_pricing_service(self, instrument_id: str) -> Dict[str, float]:
+        """Simulate external pricing service with extended price information"""
         await asyncio.sleep(random.uniform(0.1, 0.5))
-        return round(random.uniform(50, 200), 2)
+        last_price = round(random.uniform(50, 200), 2)
+        spread = round(random.uniform(0.01, 0.05), 2)
+        return {
+            'last': last_price,
+            'bid': round(last_price - spread/2, 2),
+            'ask': round(last_price + spread/2, 2),
+            'spread': spread,
+            'yest': round(last_price * (1 + random.uniform(-0.05, 0.05)), 2),
+            'timestamp': datetime.now().isoformat()
+        }
 
-    async def update_instrument_price(self, instrument_id: str):
-        """Fetch price for a single instrument and update in Redis with calculation time"""
+    async def update_instrument_batch(self, instrument_ids: List[str]) -> None:
+        """Update prices for a batch of instruments"""
         try:
-            # Start timing
-            start_time = time.time()
+            price_updates = {}
+            for inst_id in instrument_ids:
+                price_data = await self.mock_pricing_service(inst_id)
+                price_key = f'{self.PRICE_PREFIX}{inst_id}'
+                price_updates[price_key] = price_data
 
-            # Fetch new price
-            new_price = await self.mock_pricing_service(instrument_id)
-            
-            # Calculate processing time
-            calc_time = time.time() - start_time
-            
-            # Update instrument and price using prefixed keys
-            instrument_key = f'{self.INSTRUMENT_PREFIX}{instrument_id}'
-            price_key = f'{self.PRICE_PREFIX}{instrument_id}'
-            calc_time_key = f'{self.CALC_TIME_PREFIX}{instrument_id}'
-            
-            # Set instrument existence, price, and calculation time
             async with self.redis_client.pipeline() as pipe:
-                await pipe.set(instrument_key, instrument_id)
-                await pipe.set(price_key, str(new_price))
-                await pipe.set(calc_time_key, str(round(calc_time * 1000, 2)))
+                for key, data in price_updates.items():
+                    await pipe.hset(key, mapping=data)
                 await pipe.execute()
-            
-            print(f"Updated {instrument_id}: ${new_price} (Calc Time: {round(calc_time * 1000, 2)} ms)")
         except Exception as e:
-            print(f"Error updating {instrument_id}: {e}")
+            raise
 
-    async def update_all_instrument_prices(self, instrument_ids: List[str]):
-        """Concurrently update prices for all instruments"""
+    async def update_all_instrument_prices(self, instrument_ids: List[str]) -> None:
+        """Concurrently update prices for all instruments in batches"""
         if not self.redis_client:
             await self.connect_redis()
 
-        # Create tasks for concurrent price updates
-        tasks = [self.update_instrument_price(inst_id) for inst_id in instrument_ids]
-        await asyncio.gather(*tasks)
+        # Process in batches
+        for i in range(0, len(instrument_ids), self.config.batch_size):
+            batch = instrument_ids[i:i + self.config.batch_size]
+            await self.update_instrument_batch(batch)
 
-    async def get_instrument_details(self):
-        """Retrieve all instrument prices and calculation times"""
+    async def get_instrument_details(self) -> Dict[str, Dict]:
+        """Retrieve all instrument prices"""
+        if not self.redis_client:
+            raise RuntimeError("Redis client not connected")
+
         details = {}
         price_keys = await self.redis_client.keys(f'{self.PRICE_PREFIX}*')
         
-        for key in price_keys:
+        async with self.redis_client.pipeline() as pipe:
+            for key in price_keys:
+                await pipe.hgetall(key)
+            results = await pipe.execute()
+
+        for key, price_data in zip(price_keys, results):
             instrument_id = key.decode().replace(self.PRICE_PREFIX, '')
-            price = await self.redis_client.get(key)
-            calc_time_key = f'{self.CALC_TIME_PREFIX}{instrument_id}'
-            calc_time = await self.redis_client.get(calc_time_key)
-            
             details[instrument_id] = {
-                'price': price.decode(),
-                'calc_time_ms': calc_time.decode() if calc_time else 'N/A'
+                'prices': {k.decode(): float(v.decode()) for k, v in price_data.items()}
             }
         return details
 
-async def main():
-    # Sample instrument IDs
-    instrument_ids = [f'INST_{i}' for i in range(1, 10000)]
-
-    # Initialize service
-    pricing_service = InstrumentPricingService()
+async def main() -> None:
+    config = PricingConfig()
+    instrument_ids = [f'INST_{i}' for i in range(1, 100)]
+    pricing_service = InstrumentPricingService(config)
     
     try:
-        # Connect to Redis
         await pricing_service.connect_redis()
 
-        # Total service start time
-        total_start_time = time.time()
+        while True:
+            start_time = time.time()
+            await pricing_service.update_all_instrument_prices(instrument_ids)
+            print(f"Updated prices for {len(instrument_ids)} instruments in {time.time() - start_time:.2f} seconds")
+            print('Current time:', datetime.now().isoformat())
+            await asyncio.sleep(config.update_interval)
 
-        # Update all instrument prices concurrently
-        await pricing_service.update_all_instrument_prices(instrument_ids)
-
-        # Calculate total service execution time
-        total_exec_time = time.time() - total_start_time
-        print(f"\nTotal Service Execution Time: {round(total_exec_time * 1000, 2)} ms")
-
-        # Retrieve and print updated prices and calculation times
-        details = await pricing_service.get_instrument_details()
-        # print("\nInstrument Details:")
-        # for inst_id, info in details.items():
-        #     print(f"{inst_id}: Price=${info['price']}, Calc Time={info['calc_time_ms']} ms")
-
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        raise
     finally:
-        # Ensure Redis connection is closed
-        await pricing_service.aclose()
+        await pricing_service.close_redis()
 
 if __name__ == '__main__':
     asyncio.run(main())
