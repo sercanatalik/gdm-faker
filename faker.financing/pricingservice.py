@@ -42,7 +42,7 @@ class InstrumentPricingService:
 
     async def mock_pricing_service(self, instrument_id: str) -> Dict[str, float]:
         """Simulate external pricing service with extended price information"""
-        await asyncio.sleep(random.uniform(0.1, 0.5))
+        
         last_price = round(random.uniform(50, 200), 2)
         spread = round(random.uniform(0.01, 0.05), 2)
         return {
