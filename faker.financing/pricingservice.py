@@ -59,14 +59,23 @@ class InstrumentPricingService:
         try:
             price_updates = {}
             for inst_id in instrument_ids:
-                price_data = await self.mock_pricing_service(inst_id)
                 price_key = f'{self.PRICE_PREFIX}{inst_id}'
-                price_updates[price_key] = price_data
+                # Get current last price
+                current_last = await self.redis_client.hget(price_key, 'last')
+                
+                # Get new price data
+                price_data = await self.mock_pricing_service(inst_id)
+                
+                # Only update if price has changed or no previous price exists
+                if current_last is None or float(current_last) != price_data['last']:
+                    price_updates[price_key] = price_data
 
-            async with self.redis_client.pipeline() as pipe:
-                for key, data in price_updates.items():
-                    await pipe.hset(key, mapping=data)
-                await pipe.execute()
+            # Only execute pipeline if there are updates
+            if price_updates:
+                async with self.redis_client.pipeline() as pipe:
+                    for key, data in price_updates.items():
+                        await pipe.hset(key, mapping=data)
+                    await pipe.execute()
         except Exception as e:
             raise
 
