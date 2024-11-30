@@ -12,5 +12,6 @@ dependencies = [
     "prefect>=3.1.0",
     "pyarrow>=18.0.0",
     "python-dotenv>=1.0.1",
+    "quantlib>=1.36",
     "redis>=5.2.0",
 ]

@@ -415,6 +415,7 @@ dependencies = [
     { name = "prefect" },
     { name = "pyarrow" },
     { name = "python-dotenv" },
+    { name = "quantlib" },
     { name = "redis" },
 ]
 
@@ -427,6 +428,7 @@ requires-dist = [
     { name = "prefect", specifier = ">=3.1.0" },
     { name = "pyarrow", specifier = ">=18.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "quantlib", specifier = ">=1.36" },
     { name = "redis", specifier = ">=5.2.0" },
 ]
 
@@ -1205,6 +1207,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/0f/25911a9f080464c59fab9027482f822b86bf0608957a5fcc6eaac85aa515/PyYAML-6.0.2-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:68ccc6023a3400877818152ad9a1033e3db8625d899c72eacb5a668902e4d652", size = 751597 },
     { url = "https://files.pythonhosted.org/packages/14/0d/e2c3b43bbce3cf6bd97c840b46088a3031085179e596d4929729d8d68270/PyYAML-6.0.2-cp313-cp313-win32.whl", hash = "sha256:bc2fa7c6b47d6bc618dd7fb02ef6fdedb1090ec036abab80d4681424b84c1183", size = 140527 },
     { url = "https://files.pythonhosted.org/packages/fa/de/02b54f42487e3d3c6efb3f89428677074ca7bf43aae402517bc7cca949f3/PyYAML-6.0.2-cp313-cp313-win_amd64.whl", hash = "sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563", size = 156446 },
+]
+
+[[package]]
+name = "quantlib"
+version = "1.36"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/b5/e5911bab312b8d793de109dd9b4e11820bde447c76866967b9bc912e8b75/QuantLib-1.36-cp38-abi3-macosx_10_9_x86_64.whl", hash = "sha256:b8555e3358a2856a14978f39cee43ce83c6c0e41e4976e5788ae9b1f47f8a575", size = 16710788 },
+    { url = "https://files.pythonhosted.org/packages/79/49/73e449839f0aa2e35dcfe2be5120332bdecc9abc773f02a033484c216b5b/QuantLib-1.36-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:6c4a65bed9a3409d798e7e6f27bf01109c41f7ce0f9790d370ff92c0526465b9", size = 15109468 },
+    { url = "https://files.pythonhosted.org/packages/67/2e/8a19c9e3ae7c4ba63de3698a533dd0993620ccb6b0e45c1aaaeb842e3840/QuantLib-1.36-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:faa9ff3d6a22f9c4c76faf164609949460561229b52606bc010be286803dd750", size = 21587884 },
+    { url = "https://files.pythonhosted.org/packages/0e/72/c148a30d3e712470eee32f568fa7e9c5ed334e1dcf53b51983a8f5aa2179/QuantLib-1.36-cp38-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1c779960042832c08ebb3808991abcf01eac30072ac19be7dde6819d1a061464", size = 23017966 },
+    { url = "https://files.pythonhosted.org/packages/e3/83/729258e40e49fe3d1f239b33c10cb05978ab60e9d67c65767d04706ae466/QuantLib-1.36-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7bbeb8d0676d2d57793a8f3b0f06bf5bcd989cb8e2d907dc3b74211861256c17", size = 19628973 },
+    { url = "https://files.pythonhosted.org/packages/fd/66/f65638910bf049902e65b7c6420c0fdcd074e6362018c5fedb4585f61aef/QuantLib-1.36-cp38-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:f3e193116699c38dbd6edd0c8371b0153960c9c00e65e63656f710824b7566e6", size = 22924626 },
+    { url = "https://files.pythonhosted.org/packages/69/8d/273c7b0ba1965b1945be51ac029be1f8b2867c83650f2a13c9553527fb9e/QuantLib-1.36-cp38-abi3-musllinux_1_2_i686.whl", hash = "sha256:650bf50fcf8deb70fe25e9077be22653986f08b966b843999431e213d3c27f15", size = 24713452 },
+    { url = "https://files.pythonhosted.org/packages/11/2f/b41004a8b0ba038fecb195e189d38833c653c433f3e336ea4c1fe30e551e/QuantLib-1.36-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:ba028f24eeb1d9ca93c1150f92b83a988c79e760778fa7f0b447896876b15a20", size = 20933462 },
+    { url = "https://files.pythonhosted.org/packages/49/48/de6e019e361b171cc872657eaff2d8676b632cbf7640a5a9dfd373837aa4/QuantLib-1.36-cp38-abi3-win32.whl", hash = "sha256:acc47181e9d5aef17c4fcfc36b5a0849880213d37e635fcc60e330cd26e95922", size = 11393410 },
+    { url = "https://files.pythonhosted.org/packages/8f/0c/b336231d35af86df2f0f5607b3b72c96dbcc89456e7771ab9430c5925a29/QuantLib-1.36-cp38-abi3-win_amd64.whl", hash = "sha256:3486a4935c8a6673e12d6e944c48a2c6952acbef011307c31c3baf6c37235d75", size = 12559264 },
 ]
 
 [[package]]
