@@ -3,7 +3,7 @@ import random
 import time
 from dataclasses import dataclass
 from typing import List, Dict, Optional
-import redis.asyncio as redis
+import redis.asyncio as redis # type: ignore
 from datetime import datetime
 
 @dataclass
